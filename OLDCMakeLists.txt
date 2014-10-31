@@ -1,0 +1,123 @@
+cmake_minimum_required(VERSION 2.6)
+
+PROJECT (PredictiveSim) 
+
+FILE(GLOB SOURCE_FILES "*.cpp" "*.c" )
+FILE(GLOB INCLUDE_FILES *.h ) 
+
+
+SET(TARGET "simbicon" CACHE STRING "Name of example to build")
+SET(ENABLE_MPI OFF CACHE BOOL "Use MPI")
+
+SET(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Release;Debug"
+      CACHE STRING "Semicolon separated list of supported configuration types, only supports Debug, Release, MinSizeRel, and RelWithDebInfo, anything else will be ignored." FORCE )
+
+IF(WIN32)
+SET(OPENSIM_INSTALL_DIR "c:/Program Files (x86)/OpenSim" 
+		CACHE PATH "Top-level directory of OpenSim install")
+ELSE(WIN32)
+SET(OPENSIM_INSTALL_DIR "/usr/local/opensim" 
+		CACHE PATH "Top-level directory of OpenSim install")
+ENDIF(WIN32)
+
+# Location of headers
+SET(SIMTK_HEADERS_DIR ${OPENSIM_INSTALL_DIR}/sdk/include/SimTK/include)
+SET(OPENSIM_HEADERS_DIR ${OPENSIM_INSTALL_DIR}/sdk/include)
+
+
+# Libraries and dlls
+IF(WIN32)
+SET(MPI_HEADERS_DIR "c:/Program Files (x86)/MPICH2/include")
+SET(OPENSIM_DLLS_DIR ${OPENSIM_INSTALL_DIR}/sdk/lib)
+SET(MPI_LIBS_DIR "c:/Program Files (x86)/MPICH2/lib")
+ELSE(WIN32)
+SET(OPENSIM_DLLS_DIR ${OPENSIM_INSTALL_DIR}/lib)
+ENDIF(WIN32)
+
+#-- Add an Option to toggle the generation of the API documentation
+option(BUILD_DOCUMENTATION "Use Doxygen to create the HTML based API documentation" OFF)
+if(BUILD_DOCUMENTATION)
+  FIND_PACKAGE(Doxygen)
+  if (NOT DOXYGEN_FOUND)
+    message(FATAL_ERROR 
+      "Doxygen is needed to build the documentation. Please install it correctly")
+  endif()
+  #-- Configure the Template Doxyfile for our specific project
+  configure_file(Doxyfile.in 
+                 ${PROJECT_BINARY_DIR}/Doxyfile  @ONLY IMMEDIATE)
+  #-- Add a custom target to run Doxygen when ever the project is built
+  add_custom_target (Doxygen ALL 
+  										COMMAND ${DOXYGEN_EXECUTABLE} ${PROJECT_BINARY_DIR}/Doxyfile
+  										SOURCES ${PROJECT_BINARY_DIR}/Doxyfile)
+  # IF you do NOT want the documentation to be generated EVERY time you build the project
+  # then leave out the 'ALL' keyword from the above command.
+endif()
+
+
+SET(NameSpace "" CACHE STRING "Prefix for simtk lib names, includes trailing '_'. Leave empty to use stock SimTK libraries.")
+
+IF(WIN32)
+	IF(ENABLE_MPI)
+		#MESSAGE(${CMAKE_CXX_FLAGS})
+		SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3 /wd4481 /we4700 /MP -DUSE_MPI" )
+		SET( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3 /wd4481 /we4700 /MP -DUSE_MPI" )
+		SET(PLATFORM_LIBS  mpi)
+		#SET(PLATFORM_LIBS  SimTKlapack pthreadVC2 mpi)
+		#MESSAGE(${CMAKE_CXX_FLAGS})
+		INCLUDE_DIRECTORIES(${SIMTK_HEADERS_DIR} ${OPENSIM_HEADERS_DIR} ${MPI_HEADERS_DIR})
+		LINK_DIRECTORIES(${OPENSIM_LIBS_DIR} ${OPENSIM_DLLS_DIR} ${MPI_LIBS_DIR})
+	ELSE(ENABLE_MPI)
+		INCLUDE_DIRECTORIES(${SIMTK_HEADERS_DIR} ${OPENSIM_HEADERS_DIR})
+		LINK_DIRECTORIES(${OPENSIM_LIBS_DIR} ${OPENSIM_DLLS_DIR})
+		#SET(PLATFORM_LIBS  mpi)
+		#SET(PLATFORM_LIBS  SimTKlapack pthreadVC2 mpi)
+		SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP" )
+		SET( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP" )
+	ENDIF(ENABLE_MPI)
+ELSE(WIN32)
+	IF(ENABLE_MPI)
+		SET(CMAKE_C_COMPILER mpicc)
+		SET(CMAKE_CXX_COMPILER mpicxx)
+		SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_MPI" )
+		SET( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DUSE_MPI" )
+		#SET( CMAKE_CXX_FLAGS "-DUSE_MPI" )
+		#SET( CMAKE_C_FLAGS "-DUSE_MPI" )
+	ENDIF(ENABLE_MPI)
+		SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wuninitialized" )
+  SET(NameSpace "")
+  	INCLUDE_DIRECTORIES(${SIMTK_HEADERS_DIR} ${OPENSIM_HEADERS_DIR})
+	LINK_DIRECTORIES(${OPENSIM_LIBS_DIR} ${OPENSIM_DLLS_DIR})
+
+  IF(APPLE)
+  ELSE(APPLE)
+	SET(PLTAFORM_LIBS lapack;blas)
+  ENDIF(APPLE)
+ENDIF (WIN32)
+
+LINK_LIBRARIES(
+	debug osimCommon_d optimized osimCommon
+	debug osimSimulation_d optimized osimSimulation
+	debug osimAnalyses_d optimized osimAnalyses
+	debug osimActuators_d optimized osimActuators
+	debug osimTools_d optimized osimTools
+	debug ${NameSpace}SimTKcommon_d optimized ${NameSpace}SimTKcommon
+	debug ${NameSpace}SimTKmath_d optimized  ${NameSpace}SimTKmath
+	debug ${NameSpace}SimTKsimbody_d optimized ${NameSpace}SimTKsimbody
+	${PLATFORM_LIBS})
+
+
+ADD_EXECUTABLE(${TARGET}  ${SOURCE_FILES} ${INCLUDE_FILES}) 
+
+
+#IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+#	SET(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH}
+#			CACHE STRING "Install path prefix." FORCE)
+#ENDIF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+
+MARK_AS_ADVANCED(CMAKE_INSTALL_PREFIX)
+
+SET_TARGET_PROPERTIES(
+	${TARGET} PROPERTIES
+	PROJECT_LABEL PredictiveSim)
+
+#INSTALL_TARGETS(/bin ${TARGET})
